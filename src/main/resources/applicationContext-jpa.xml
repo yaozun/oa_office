@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:jpa="http://www.springframework.org/schema/data/jpa"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.springframework.org/schema/beans
+http://www.springframework.org/schema/beans/spring-beans.xsd
+http://www.springframework.org/schema/aop
+http://www.springframework.org/schema/aop/spring-aop.xsd
+http://www.springframework.org/schema/context
+http://www.springframework.org/schema/context/spring-context.xsd
+http://www.springframework.org/schema/tx
+http://www.springframework.org/schema/tx/spring-tx.xsd
+http://www.springframework.org/schema/data/jpa
+http://www.springframework.org/schema/data/jpa/spring-jpa.xsd">
+	<!-- 1.引入公共配置文件 db.properties -->
+	<context:property-placeholder location="classpath:db.properties" />
+	<!--2.配置数据源（c3p0） -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${dataSource.driverClassName}"></property>
+		<property name="jdbcUrl" value="${dataSource.url}"></property>
+		<property name="user" value="${dataSource.username}"></property>
+		<property name="password" value="${dataSource.password}"></property>
+		<property name="maxPoolSize" value="10"></property>
+		<property name="minPoolSize" value="1"></property>
+		<property name="initialPoolSize" value="5"></property>
+		<property name="maxIdleTime" value="200"></property>
+	</bean>
+
+	<!--2.1.配置另一个数据源（c3p0）用于存储activiti数据表 -->
+	<bean id="dataSource1" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${dataSource.driverClassName1}"></property>
+		<property name="jdbcUrl" value="${dataSource.url1}"></property>
+		<property name="user" value="${dataSource.username1}"></property>
+		<property name="password" value="${dataSource.password1}"></property>
+		<property name="maxPoolSize" value="10"></property>
+		<property name="minPoolSize" value="1"></property>
+		<property name="initialPoolSize" value="1"></property>
+		<property name="maxIdleTime" value="200"></property>
+	</bean>
+
+	<!--3.配置JPA entityManagerFactory -->
+	<bean id="entityManagerFactory"
+		class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="packagesToScan" value="com.oa_office" />
+		<!--用于指定持久化实方言 <property name="jpaDialect"> <bean class="org.springframework.orm.jpa.vendor.HibernateJpaDialect" 
+			/> </property> -->
+		<!-- ClassLoader 实现 LoadTimeWeaver <property name="loadTimeWeaver"> <bean 
+			class="org.springframework.instrument.classloading.InstrumentationLoadTimeWeaver"/> 
+			</property> -->
+		<!-- 用于指定持久化实现厂商类 -->
+		<property name="persistenceProvider">
+			<bean class="org.hibernate.jpa.HibernatePersistenceProvider" />
+		</property>
+		<!-- <property name="jpaVendorAdapter"> <bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter"/> 
+			</property> -->
+		<property name="jpaProperties">
+			<props>
+				<prop key="hibernate.dialect">${hibernate.dialect}</prop>
+				<prop key="hibernate.show_sql">${hibernate.show_sql}</prop>
+				<prop key="hibernate.hbm2ddl.auto">${hibernate.hbm2ddl.auto}</prop>
+				<prop key="hibernate.max_fetch_depth">2</prop>
+				<!-- <prop key="hibernate.current_session_context_class">thread</prop> 
+					<prop key="hibernate.ejb.naming_strategy">org.hibernate.cfg.ImprovedNamingStrategy</prop> 
+					<prop key="hibernate.query.substitutions">true 1, false 0</prop> <prop key="hibernate.default_batch_fetch_size">16</prop> 
+					<prop key="hibernate.generate_statistics">true</prop> <prop key="hibernate.bytecode.use_reflection_optimizer">true</prop> 
+					<prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.EhCacheRegionFactory</prop> 
+					<prop key="hibernate.cache.provider_class">net.sf.ehcache.hibernate.EhCacheProvider</prop> 
+					<prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.EhCacheRegionFactory</prop> 
+					<prop key="cache.cache.use_query_cache">true</prop> <prop key="cache.cache.use_second_level_cache">true</prop> -->
+			</props>
+		</property>
+	</bean>
+	<!--4.配置JPA事务管理 -->
+	<bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+		<property name="entityManagerFactory" ref="entityManagerFactory" />
+	</bean>
+	<!--5.注解事务 ：transaction-manager="transactionManager" proxy-target-class="true" -->
+	<tx:annotation-driven />
+
+	<!--6.指定JPA实现的持久层的根目录 entity-manager-factory-ref:默认获取id=entityManagerFactory 
+		Bean transaction-manager-ref:默认获取id=transactionManager Bean -->
+	<jpa:repositories base-package="com.oa_office" />
+
+
+	<!-- ====================spring整合activiti=================== -->
+
+	<!-- 1.流程引擎的配置 -->
+	<bean id="processEngineConfiguration" class="org.activiti.spring.SpringProcessEngineConfiguration">
+		<property name="processEngineName" value="activitiProcessEngine"></property>
+		<property name="dataSource" ref="dataSource1" />
+		<property name="transactionManager" ref="transactionManager" />
+		<property name="databaseSchemaUpdate" value="true" />
+		<property name="jobExecutorActivate" value="false" />
+
+		<property name="activityFontName" value="宋体" />
+		<property name="labelFontName" value="宋体" />
+		<property name="annotationFontName" value="宋体" />
+		<!--<property name="deploymentResources" value="classpath*:/bpmn/leave.zip"></property> -->
+		<!--<property name="deploymentResources" value="classpath*:/diagrams/HelloWorld.bpmn"></property> -->
+		<!-- 自动部署资源 -->
+		<!--<property name="deploymentResources" value="classpath*:/bpmn/**/*.zip"></property> -->
+	</bean>
+
+	<!-- 2.创建流程引擎的工厂 -->
+	<bean id="processEngineFactory" class="org.activiti.spring.ProcessEngineFactoryBean">
+		<property name="processEngineConfiguration" ref="processEngineConfiguration" />
+	</bean>
+
+	<!-- 3.获取processEngineFactory中Activiti的7大Service -->
+	<bean id="repositoryService" factory-bean="processEngineFactory"
+		factory-method="getRepositoryService" />
+	<bean id="taskService" factory-bean="processEngineFactory"
+		factory-method="getTaskService" />
+	<bean id="runtimeService" factory-bean="processEngineFactory"
+		factory-method="getRuntimeService" />
+	<bean id="formService" factory-bean="processEngineFactory"
+		factory-method="getFormService" />
+	<bean id="identityService" factory-bean="processEngineFactory"
+		factory-method="getIdentityService" />
+	<bean id="historyService" factory-bean="processEngineFactory"
+		factory-method="getHistoryService" />
+	<bean id="managementService" factory-bean="processEngineFactory"
+		factory-method="getManagementService" />
+
+</beans>
